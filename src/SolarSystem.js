@@ -1,8 +1,12 @@
 import * as THREE from 'three';
 
-// Solar system — sun and planets in the XZ ecliptic plane.
+// Solar system — sun and planets in the ecliptic plane.
 // Earth sits at the origin at its correct orbital distance from the sun.
 // Distances are artistic (not to scale) but order and proportions are correct.
+//
+// Everything is built in a group's local XZ plane with the sun on local +X;
+// alignTo() rotates the group so that axis tracks the real (tilted) sun
+// direction, keeping the orbit rings passing through both Earth and the sun.
 
 const PLANETS = [
     { name: 'Mercury', radius: 0.06, orbit: 8, speed: 0.9, color: 0xa0a0a0 },
@@ -15,22 +19,34 @@ const PLANETS = [
     { name: 'Neptune', radius: 0.19, orbit: 100, speed: 0.025, color: 0x3060d0 },
 ];
 
+const _X_AXIS = new THREE.Vector3(1, 0, 0);
+const _dir = new THREE.Vector3();
+
 export class SolarSystem {
     constructor(scene, sunPosition) {
         this.scene = scene;
-        this.sunPos = sunPosition.clone();
+        this.sunDist = sunPosition.length();
         this.planets = [];
+
+        this.group = new THREE.Group();
+        scene.add(this.group);
+        this.alignTo(sunPosition);
 
         this.createOrbitRings();
         this.createPlanets();
     }
 
+    // Rotate the whole ecliptic so local +X points at the (scene-local) sun
+    alignTo(sunDir) {
+        this.group.quaternion.setFromUnitVectors(_X_AXIS, _dir.copy(sunDir).normalize());
+    }
+
     createOrbitRings() {
-        // All orbits are concentric circles centered on the sun, in the XZ plane
+        // All orbits are concentric circles centered on the sun, in the local XZ plane
         const allOrbits = [
             ...PLANETS.map(p => ({ r: p.orbit, color: 0x334455, opacity: 0.12 })),
             // Earth's orbit — highlighted in blue
-            { r: this.sunPos.length(), color: 0x4facfe, opacity: 0.2 }
+            { r: this.sunDist, color: 0x4facfe, opacity: 0.2 }
         ];
 
         allOrbits.forEach(o => {
@@ -38,16 +54,16 @@ export class SolarSystem {
             for (let i = 0; i <= 128; i++) {
                 const a = (i / 128) * Math.PI * 2;
                 points.push(new THREE.Vector3(
-                    this.sunPos.x + Math.cos(a) * o.r,
+                    this.sunDist + Math.cos(a) * o.r,
                     0,
-                    this.sunPos.z + Math.sin(a) * o.r
+                    Math.sin(a) * o.r
                 ));
             }
             const geo = new THREE.BufferGeometry().setFromPoints(points);
             const mat = new THREE.LineBasicMaterial({
                 color: o.color, transparent: true, opacity: o.opacity
             });
-            this.scene.add(new THREE.Line(geo, mat));
+            this.group.add(new THREE.Line(geo, mat));
         });
     }
 
@@ -74,7 +90,7 @@ export class SolarSystem {
                 mesh.add(ring);
             }
 
-            this.scene.add(mesh);
+            this.group.add(mesh);
             this.planets.push({
                 mesh, orbit: p.orbit, speed: p.speed,
                 startAngle, name: p.name
@@ -85,11 +101,11 @@ export class SolarSystem {
     update(elapsed) {
         this.planets.forEach(p => {
             const angle = p.startAngle + elapsed * p.speed;
-            // Orbit in XZ plane around the sun position
+            // Orbit in the local XZ plane around the sun
             p.mesh.position.set(
-                this.sunPos.x + Math.cos(angle) * p.orbit,
+                this.sunDist + Math.cos(angle) * p.orbit,
                 0,
-                this.sunPos.z + Math.sin(angle) * p.orbit
+                Math.sin(angle) * p.orbit
             );
             p.mesh.rotation.y += 0.01;
         });

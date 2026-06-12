@@ -42,7 +42,7 @@ async function init() {
   scene.background = new THREE.Color(0x000000);
   scene.rotation.y = -Math.PI / 2;
 
-  const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 120);
+  const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 150);
   camera.position.set(0, 0, 3.5);
 
   const renderer = new THREE.WebGLRenderer({
@@ -61,7 +61,7 @@ async function init() {
   controls.enableDamping = true;
   controls.dampingFactor = 0.05;
   controls.minDistance = 1.15; // Clear terrain displacement + atmosphere
-  controls.maxDistance = 80;
+  controls.maxDistance = 50;   // Stay inside the star shell (r=70) and skybox (r=90)
 
   // Precision for hover detection on overlay points
   raycaster.params.Points.threshold = 0.03;
@@ -371,9 +371,9 @@ async function init() {
     if (key === 'r') { diag.stars = !diag.stars; changed = true; }
     if (key === 'x') { diag.raycaster = !diag.raycaster; changed = true; }
 
-    // Toggle solar system visibility
+    // Toggle solar system visibility (planets + orbit rings)
     if (key === 's') {
-      solarSystem.planets.forEach(p => p.mesh.visible = diag.solar);
+      solarSystem.group.visible = diag.solar;
     }
     // Toggle orbit objects visibility
     if (key === 'o') {
@@ -434,6 +434,15 @@ async function init() {
     if (globe.sunMesh && globe.uniforms.uSunDir) {
       globe.sunMesh.getWorldPosition(_tempVec).normalize();
       globe.uniforms.uSunDir.value.copy(_tempVec);
+    }
+
+    // Keep the ecliptic plane (orbit rings + planets) aligned with the tilted real sun
+    solarSystem.alignTo(globe.sunDir);
+
+    // Skybox follows the camera — you can never zoom outside the milky way
+    if (globe.milkyWay) {
+      globe.milkyWay.position.copy(camera.position);
+      scene.worldToLocal(globe.milkyWay.position);
     }
 
     hud.updateTelemetry(camera);

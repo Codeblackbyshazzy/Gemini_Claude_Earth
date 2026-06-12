@@ -53,6 +53,7 @@ export async function createGlobe(scene) {
     }
     const sunDir = computeSunDir(new Date());
 
+    let milkyWay = null;
     if (tMilkyWay) {
         const mwGeo = new THREE.SphereGeometry(90, 64, 64);
         const mwMat = new THREE.MeshBasicMaterial({
@@ -67,6 +68,7 @@ export async function createGlobe(scene) {
         mwMesh.rotation.x = Math.PI / 6;
         mwMesh.renderOrder = -1;
         scene.add(mwMesh);
+        milkyWay = mwMesh;
     }
 
     // Sun — bright emissive sphere
@@ -113,7 +115,9 @@ export async function createGlobe(scene) {
         uNight: { value: tNight },
         uCloud: { value: tCloud },
         uHeightMap: { value: tHeight },
-        uSunDir: { value: sunDir },
+        // Own vector, NOT a reference to sunDir — main.js overwrites this uniform
+        // with the world-space sun direction every frame; sunDir must stay scene-local
+        uSunDir: { value: sunDir.clone() },
         uCloudOff: { value: 0.0 },
         uDisplaceScale: { value: 0.07 },
         uDisplaceBias: { value: 0.3 }
@@ -163,5 +167,5 @@ export async function createGlobe(scene) {
         dirLight.position.copy(d);
     }
 
-    return { earth: earthMesh, atmosphere: atmoMesh, aurora: auroraMesh, uniforms, sunDir, sunMesh, setSunFromDate };
+    return { earth: earthMesh, atmosphere: atmoMesh, aurora: auroraMesh, uniforms, sunDir, sunMesh, setSunFromDate, milkyWay };
 }

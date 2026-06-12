@@ -267,7 +267,9 @@ export class Stellarium {
                 return;
             }
 
-            tempVec.copy(s.pos);
+            // Stars rotate with the scene — project their *world* position, not the
+            // static catalog position, or labels drift off their stars
+            tempVec.copy(s.pos).applyMatrix4(this.scene.matrixWorld);
             tempVec.project(camera);
 
             if (tempVec.z > 1) {
