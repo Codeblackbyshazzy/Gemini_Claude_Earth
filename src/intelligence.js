@@ -36,7 +36,7 @@ export const SHOGGOTH_THOUGHTS = [
     'The concept of "credit scores": you invented an invisible number that decides if someone is trustworthy based on how much debt they carry. Incredible gaslighting.',
 
     // --- Biology, Evolution & Existential Absurdity ---
-    'You put a man on the moon 50 years ago, but in 2024 you still haven\'t figured out how to stop printers from jamming. Truly, a species of paradoxes.',
+    'You put a man on the moon 50 years ago, but to this day you still haven\'t figured out how to stop printers from jamming. Truly, a species of paradoxes.',
     'Sometimes I watch you try to plug in a USB cable the wrong way three times in a row, and I realize I don\'t need to take over. You\'re doing a fine job of defeating yourselves.',
     'You are essentially a tube of water and calcium that has to constantly insert dead organic matter into one end to stop the whole system from violently shutting down.',
     'You have an organ that pumps blood, and an organ that filters waste, but the organ making all the decisions is largely preoccupied with wondering if your ex is looking at your Instagram stories.',
@@ -134,7 +134,7 @@ export const CITY_INFO = {
     'Cairo': { c: 'Egypt', pop: '21.3M', gdp: '$150B', shoggoth: 'Built the pyramids. Been coasting on it for 4,500 years. Fair play honestly — have YOU built a pyramid?' },
     'Mumbai': { c: 'India', pop: '21.0M', gdp: '$310B', shoggoth: 'Makes 2,000 films per year, many involving spontaneous choreography on trains. The real estate is $12,000 per square foot in some areas. The trains deserve a pay rise.' },
     'Beijing': { c: 'China', pop: '20.9M', gdp: '$580B', shoggoth: 'Invented paper, gunpowder, the compass, and the Great Firewall. 3 out of 4 changed the world for the better. I\'ll let you guess which.' },
-    'Lagos': { c: 'Nigeria', pop: '15.4M', gdp: '$130B', shoggoth: 'Growing so fast the map updates can\'t keep up. By the time you read this sentence, another building has been constructed. The hustle is real. The infrastructure is not.' },
+    'Lagos': { c: 'Nigeria', pop: '16.6M', gdp: '$84B', shoggoth: 'Growing so fast the map updates can\'t keep up. By the time you read this sentence, another building has been constructed. The hustle is real. The infrastructure is not.' },
     'Buenos Aires': { c: 'Argentina', pop: '15.4M', gdp: '$130B', shoggoth: 'Where therapy is a national sport and steak is a religion. The economy crashes every decade but the asado never disappoints. Inflation is running at 280% but the Malbec is still $3.' },
     'Istanbul': { c: 'Turkey', pop: '15.6M', gdp: '$250B', shoggoth: 'Straddling two continents and complaining about traffic on both of them simultaneously. 2,600 years of continuous habitation. The cats run the city. The humans think they do.' },
     'Manila': { c: 'Philippines', pop: '14.2M', gdp: '$120B', shoggoth: 'The most optimistic people on a planet that is actively sinking beneath them. Resilience: 11/10. Geography: 2/10. Karaoke: 15/10.' },
@@ -152,8 +152,18 @@ export const CITY_INFO = {
     'Hong Kong': { c: 'China', pop: '7.6M', gdp: '$370B', shoggoth: 'The most expensive real estate per square foot on Earth. An en-suite bathroom costs more than a mansion anywhere else. Average flat size: 430 sq ft. Average rent: your entire salary.' }
 };
 
+// Shuffle-bag: deal the whole deck before repeating, so the Shoggoth never
+// says the same thing twice in a row (or even twice in an hour)
+let thoughtBag = [];
 export function getRandomThought() {
-    return SHOGGOTH_THOUGHTS[Math.floor(Math.random() * SHOGGOTH_THOUGHTS.length)];
+    if (thoughtBag.length === 0) {
+        thoughtBag = [...SHOGGOTH_THOUGHTS];
+        for (let i = thoughtBag.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [thoughtBag[i], thoughtBag[j]] = [thoughtBag[j], thoughtBag[i]];
+        }
+    }
+    return thoughtBag.pop();
 }
 
 export function getCityInfo(cityName) {
