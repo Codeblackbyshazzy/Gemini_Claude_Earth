@@ -38,6 +38,7 @@
   </div>
 
   <div id="scanlines"></div>
+  <div id="vignette"></div>
   <div class="hud-frame">
     <div class="hud-frame-corner tl"></div>
     <div class="hud-frame-corner tr"></div>
@@ -69,6 +70,7 @@
       <div><span class="lbl">LAT</span><span class="val" id="hud-lat">--</span></div>
       <div><span class="lbl">LON</span><span class="val" id="hud-lon">--</span></div>
       <div><span class="lbl">ALT</span><span class="val" id="hud-alt">--</span></div>
+      <div><span class="lbl">UTC</span><span class="val" id="hud-utc">--:--:--</span></div>
     </div>
 
     <div class="hp hud-stats neon-border">
@@ -92,8 +94,8 @@
     </div>
 
     <div class="hud-controls hp neon-border">
-      <div>[DRAG] ORBIT &bullet; [SCROLL] ZOOM &bullet; [CLICK] SELECT TARGET</div>
-      <div>[Hover] INSPECT ASSET &bullet; UNAUTHORIZED ACCESS STRICTLY PROHIBITED.</div>
+      <div>[DRAG] ORBIT &bullet; [SCROLL] ZOOM &bullet; [CLICK] GROUND SCAN + LIVE WX</div>
+      <div>[G] GRAND TOUR &bullet; [H] SYSTEMS &bullet; [B] BLOOM &bullet; UNAUTHORIZED ACCESS PROHIBITED.</div>
     </div>
 
     <div class="hud-layers neon-border" id="layer-panel">
@@ -104,6 +106,8 @@
       <button class="layer-btn warning" data-layer="seismic">5 SEISMIC</button>
       <button class="layer-btn warning" data-layer="livequakes">6 <span class="live-badge"></span>QUAKES (LIVE)</button>
       <button class="layer-btn warning" data-layer="liveevents">7 <span class="live-badge"></span>EVENTS (LIVE)</button>
+      <button class="layer-btn info" data-layer="population">8 POP</button>
+      <button class="layer-btn" id="tour-btn">★ TOUR</button>
     </div>
 
     <!-- Intelligence terminal -->

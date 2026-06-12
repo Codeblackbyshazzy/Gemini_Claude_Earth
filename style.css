@@ -1251,3 +1251,28 @@ canvas {
         display: none !important;
     }
 }
+/* ═══ SPECTACLE PACK ═══ */
+#vignette {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 6;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 12, 0.5) 100%);
+}
+
+#tour-btn {
+    border-color: rgba(255, 200, 60, 0.5);
+    color: #ffd45e;
+}
+
+#tour-btn.on {
+    background: rgba(255, 200, 60, 0.18);
+    color: #ffe9a8;
+    box-shadow: 0 0 14px rgba(255, 200, 60, 0.45);
+    animation: tour-pulse 2s ease-in-out infinite;
+}
+
+@keyframes tour-pulse {
+    0%, 100% { box-shadow: 0 0 8px rgba(255, 200, 60, 0.3); }
+    50% { box-shadow: 0 0 18px rgba(255, 200, 60, 0.6); }
+}

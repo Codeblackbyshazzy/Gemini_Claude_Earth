@@ -26,6 +26,7 @@ export class EarthOrbits {
         this.issMesh = null;
         this.issTrailPoints = [];
         this.issTrailLine = null;
+        this.realISSPos = null; // set from live telemetry in main.js
 
         this.createMoon();
         this.createISS();
@@ -115,18 +116,21 @@ export class EarthOrbits {
             this.moonMesh.rotation.y = moonAngle;
         }
 
-        // ISS: 51.6° inclination, altitude 1.06, fast orbit
-        const issAngle = elapsed * 2.0;
+        // ISS: real telemetry when available, otherwise simulated 51.6° orbit
         const issAlt = 1.06;
         const issInc = 51.6 * Math.PI / 180;
-        const x = Math.cos(issAngle) * issAlt;
-        const z = Math.sin(issAngle) * issAlt;
-        const issY = z * Math.sin(issInc);
-        const issZ = z * Math.cos(issInc);
-        this.issMesh.position.set(x, issY, issZ);
+        if (this.realISSPos) {
+            this.issMesh.position.lerp(this.realISSPos, 0.04);
+            if (this.issTrailLine) this.issTrailLine.visible = false;
+        } else {
+            const issAngle = elapsed * 2.0;
+            const x = Math.cos(issAngle) * issAlt;
+            const z = Math.sin(issAngle) * issAlt;
+            this.issMesh.position.set(x, z * Math.sin(issInc), z * Math.cos(issInc));
+        }
 
-        // Update ISS trail
-        if (this.issTrailLine) {
+        // Update ISS trail (simulated orbit only)
+        if (this.issTrailLine && !this.realISSPos) {
             const positions = this.issTrailLine.geometry.attributes.position.array;
             const trailLen = 300;
             for (let i = 0; i < trailLen; i++) {

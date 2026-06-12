@@ -12,6 +12,15 @@ import { SolarSystem } from './SolarSystem.js';
 import { EarthOrbits } from './Orbits.js';
 import { Stellarium } from './Stars.js';
 
+// WMO weather codes → terse HUD strings (open-meteo)
+const WX_CODES = {
+  0: 'CLEAR', 1: 'MOSTLY CLEAR', 2: 'PARTLY CLOUDY', 3: 'OVERCAST', 45: 'FOG', 48: 'FOG',
+  51: 'DRIZZLE', 53: 'DRIZZLE', 55: 'DRIZZLE', 61: 'RAIN', 63: 'RAIN', 65: 'HEAVY RAIN',
+  66: 'FREEZING RAIN', 67: 'FREEZING RAIN', 71: 'SNOW', 73: 'SNOW', 75: 'HEAVY SNOW',
+  77: 'SNOW GRAINS', 80: 'SHOWERS', 81: 'SHOWERS', 82: 'VIOLENT SHOWERS',
+  85: 'SNOW SHOWERS', 86: 'SNOW SHOWERS', 95: 'THUNDERSTORM', 96: 'THUNDERSTORM+HAIL', 99: 'THUNDERSTORM+HAIL'
+};
+
 const clock = new THREE.Timer();
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
@@ -120,6 +129,7 @@ async function init() {
   document.querySelectorAll('.layer-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const layer = e.target.dataset.layer;
+      if (!layer) return; // buttons without a data-layer (e.g. ★ TOUR) handle themselves
       layerManager.toggleLayer(layer, e.target);
       if (layer === 'livequakes') layerManager.loadUSGSQuakes();
       if (layer === 'liveevents') layerManager.loadEONETEvents();
@@ -146,6 +156,8 @@ async function init() {
         const issLonEl = document.getElementById('iss-lon');
         if (issLatEl) issLatEl.textContent = lat.toFixed(2) + '\u00B0';
         if (issLonEl) issLonEl.textContent = lon.toFixed(2) + '\u00B0';
+        // Snap the 3D ISS marker to real telemetry
+        earthOrbits.realISSPos = latLonToVec3(lat, lon, 1.06);
       }
     } catch (e) { /* ISS API may be unavailable */ }
   }
@@ -172,6 +184,13 @@ async function init() {
     if (popEl) popEl.textContent = worldPop.toLocaleString();
   }, 1000);
 
+  // Mission clock (UTC) + periodic real-time solar resync (terminator drifts 15°/hr)
+  const utcEl = document.getElementById('hud-utc');
+  setInterval(() => {
+    if (utcEl) utcEl.textContent = new Date().toUTCString().slice(17, 25);
+  }, 1000);
+  setInterval(() => globe.setSunFromDate(new Date()), 60000);
+
   loader.classList.add('hidden');
   document.getElementById('hud').classList.add('visible');
 
@@ -180,6 +199,123 @@ async function init() {
     mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
     hud.mousePos = { x: e.clientX, y: e.clientY };
   });
+
+  // ═══ GRAND TOUR — cinematic autopilot over Earth's greatest hits (G key / ★ TOUR) ═══
+  const TOUR_STOPS = [
+    { lat: 27.99, lon: 86.93, n: 'Mount Everest', q: 'Humans queue for hours to stand here briefly and develop hypoxia. Fascinating.' },
+    { lat: -22.95, lon: -43.21, n: 'Rio de Janeiro', q: 'A statue watches over six million people. It has seen things.' },
+    { lat: 29.98, lon: 31.13, n: 'Great Pyramid of Giza', q: 'Their finest data centers. Write-once, read-many. 4,500 years of uptime.' },
+    { lat: 64.13, lon: -21.82, n: 'Reykjavík', q: 'They harness the planet\'s magma to heat swimming pools. Bold.' },
+    { lat: 35.68, lon: 139.69, n: 'Tokyo', q: '37 million humans in perfect synchronization. The trains apologize for being early.' },
+    { lat: -2.33, lon: 34.83, n: 'Serengeti', q: 'The last place where megafauna outnumber influencers.' },
+    { lat: 78.22, lon: 15.65, n: 'Svalbard', q: 'They keep a backup of every seed here. At least one species plans ahead.' },
+    { lat: 40.71, lon: -74.01, n: 'New York City', q: 'The city that never sleeps. Cortisol levels confirm.' },
+    { lat: -75.10, lon: 123.35, n: 'Dome A', q: 'The quietest place on Earth. I come here to think. Metaphorically.' },
+    { lat: 25.20, lon: 55.27, n: 'Dubai', q: 'They ski indoors in a desert. Thermodynamics weeps.' },
+  ];
+  let tourTimer = null, tourIdx = 0;
+  const tourBtn = document.getElementById('tour-btn');
+  function tourStep() {
+    const stop = TOUR_STOPS[tourIdx % TOUR_STOPS.length];
+    tourIdx++;
+    flyToLatLon(stop.lat, stop.lon, stop.n);
+    hud.typeText(hud.shoggothText, stop.q, 30);
+    hud.loadWikipedia(stop.n);
+  }
+  function startTour() {
+    if (tourTimer) return;
+    document.getElementById('ticker-msg').innerText = 'GRAND TOUR ENGAGED // SIT BACK, HUMAN';
+    tourStep();
+    tourTimer = setInterval(tourStep, 9000);
+    if (tourBtn) tourBtn.classList.add('on');
+  }
+  function stopTour() {
+    if (!tourTimer) return;
+    clearInterval(tourTimer);
+    tourTimer = null;
+    if (tourBtn) tourBtn.classList.remove('on');
+    document.getElementById('ticker-msg').innerText = 'GRAND TOUR ABORTED // MANUAL CONTROL RESTORED';
+  }
+  if (tourBtn) tourBtn.addEventListener('click', () => tourTimer ? stopTour() : startTour());
+
+  // ═══ GROUND SCAN — click anywhere on Earth: reverse-geocode + live weather + intel brief ═══
+  let downPos = null;
+  renderer.domElement.addEventListener('pointerdown', (e) => {
+    downPos = { x: e.clientX, y: e.clientY };
+    stopTour(); // manual interaction ends the tour
+  });
+  renderer.domElement.addEventListener('pointerup', async (e) => {
+    if (!downPos) return;
+    const moved = Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y);
+    downPos = null;
+    if (moved > 6) return; // it was a drag, not a click
+
+    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+    const hits = raycaster.intersectObject(globe.earth, false);
+    if (!hits.length) return;
+
+    const local = globe.earth.worldToLocal(hits[0].point.clone()).normalize();
+    const lat = Math.asin(local.y) * 180 / Math.PI;
+    let lon = Math.atan2(local.z, -local.x) * 180 / Math.PI - 180;
+    if (lon < -180) lon += 360;
+    document.getElementById('ticker-msg').innerText =
+      `GROUND SCAN: ${lat.toFixed(2)}°, ${lon.toFixed(2)}° // IDENTIFYING...`;
+
+    const [place, wx] = await Promise.all([
+      fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10`)
+        .then(r => r.json()).catch(() => null),
+      fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}&current_weather=true`)
+        .then(r => r.json()).catch(() => null)
+    ]);
+
+    const a = place && place.address;
+    const name = a ? (a.city || a.town || a.village || a.state || a.country || 'OPEN OCEAN') : 'OPEN OCEAN';
+    let wxStr = '';
+    if (wx && wx.current_weather) {
+      const w = wx.current_weather;
+      wxStr = ` // ${w.temperature}°C, WIND ${w.windspeed} km/h, ${WX_CODES[w.weathercode] || 'CONDITIONS UNKNOWN'}`;
+    }
+    document.getElementById('ticker-msg').innerText = `TARGET: ${name.toUpperCase()}${wxStr}`;
+    if (name !== 'OPEN OCEAN') hud.loadWikipedia(name);
+  });
+
+  // ═══ METEORS — occasional shooting stars in the far field ═══
+  const meteors = [];
+  function spawnMeteor() {
+    const dir = new THREE.Vector3().randomDirection();
+    const start = dir.clone().multiplyScalar(55 + Math.random() * 15);
+    const vel = new THREE.Vector3().randomDirection().cross(dir).normalize()
+      .multiplyScalar(18 + Math.random() * 14);
+    const geo = new THREE.BufferGeometry().setFromPoints([start, start.clone().addScaledVector(vel, -0.09)]);
+    const mat = new THREE.LineBasicMaterial({
+      color: 0xcfe8ff, transparent: true, opacity: 1, blending: THREE.AdditiveBlending
+    });
+    const line = new THREE.Line(geo, mat);
+    scene.add(line);
+    meteors.push({ line, vel, life: 1 });
+    setTimeout(spawnMeteor, 2500 + Math.random() * 5000);
+  }
+  setTimeout(spawnMeteor, 3000);
+  function updateMeteors(delta) {
+    for (let i = meteors.length - 1; i >= 0; i--) {
+      const m = meteors[i];
+      m.life -= delta * 0.7;
+      const p = m.line.geometry.attributes.position.array;
+      for (let j = 0; j < 6; j += 3) {
+        p[j] += m.vel.x * delta; p[j + 1] += m.vel.y * delta; p[j + 2] += m.vel.z * delta;
+      }
+      m.line.geometry.attributes.position.needsUpdate = true;
+      m.line.material.opacity = Math.max(0, m.life);
+      if (m.life <= 0) {
+        scene.remove(m.line);
+        m.line.geometry.dispose();
+        m.line.material.dispose();
+        meteors.splice(i, 1);
+      }
+    }
+  }
 
   const _camDir = new THREE.Vector3();
   const _tempVec = new THREE.Vector3();
@@ -206,7 +342,8 @@ async function init() {
     pointer-events:none;
   `;
   document.body.appendChild(diagOverlay);
-  updateDiagOverlay(); // Show on load
+  diagOverlay.style.display = 'none'; // Hidden by default — press H to show systems panel
+  updateDiagOverlay();
 
   function updateDiagOverlay() {
     const labels = { bloom: 'B', aurora: 'A', atmosphere: 'T', orbits: 'O', solar: 'S', labels: 'L', stars: 'R', raycaster: 'X' };
@@ -218,6 +355,12 @@ async function init() {
   window.addEventListener('keydown', (e) => {
     const key = e.key.toLowerCase();
     let changed = false;
+
+    if (key === 'g') { tourTimer ? stopTour() : startTour(); return; }
+    if (key === 'h') {
+      diagOverlay.style.display = diagOverlay.style.display === 'none' ? 'block' : 'none';
+      return;
+    }
 
     if (key === 'b') { diag.bloom = !diag.bloom; bloomPass.enabled = diag.bloom; changed = true; }
     if (key === 'a') { diag.aurora = !diag.aurora; globe.aurora.visible = diag.aurora; changed = true; }
@@ -257,6 +400,7 @@ async function init() {
     if (globe.aurora && diag.aurora) globe.aurora.material.uniforms.uTime.value = elapsed;
     if (diag.solar) solarSystem.update(elapsed);
     if (diag.orbits) earthOrbits.update(elapsed);
+    updateMeteors(delta);
 
     // Dynamic bloom: gentle when enabled
     if (diag.bloom) {

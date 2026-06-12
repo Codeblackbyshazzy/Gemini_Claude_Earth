@@ -35,8 +35,23 @@ export async function createGlobe(scene) {
     tNight.colorSpace = THREE.SRGBColorSpace;
     if (tMilkyWay) tMilkyWay.colorSpace = THREE.SRGBColorSpace;
 
-    // Sun direction in XZ plane — keeps ecliptic flat so orbit rings pass through earth
-    const sunDir = new THREE.Vector3(1, 0, 0.5).normalize();
+    // REAL-TIME SOLAR SYNC — subsolar point from current UTC (declination + hour angle),
+    // so the day/night terminator on the globe matches reality right now
+    function computeSunDir(date) {
+        const start = Date.UTC(date.getUTCFullYear(), 0, 0);
+        const doy = (date.getTime() - start) / 86400000;
+        const decl = -23.44 * Math.cos((2 * Math.PI / 365.24) * (doy + 10));
+        const utcH = date.getUTCHours() + date.getUTCMinutes() / 60 + date.getUTCSeconds() / 3600;
+        const subLon = (12 - utcH) * 15;
+        const phi = (90 - decl) * Math.PI / 180;
+        const theta = (subLon + 180) * Math.PI / 180;
+        return new THREE.Vector3(
+            -Math.sin(phi) * Math.cos(theta),
+            Math.cos(phi),
+            Math.sin(phi) * Math.sin(theta)
+        ).normalize();
+    }
+    const sunDir = computeSunDir(new Date());
 
     if (tMilkyWay) {
         const mwGeo = new THREE.SphereGeometry(90, 64, 64);
@@ -68,6 +83,26 @@ export async function createGlobe(scene) {
     const sunMesh = new THREE.Mesh(sunGeo, sunMat);
     sunMesh.position.copy(sunDir).multiplyScalar(20);
     scene.add(sunMesh);
+
+    // Corona glow — additive radial sprite parented to the sun
+    const glowCanvas = document.createElement('canvas');
+    glowCanvas.width = glowCanvas.height = 256;
+    const gctx = glowCanvas.getContext('2d');
+    const grad = gctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+    grad.addColorStop(0.0, 'rgba(255,245,210,1)');
+    grad.addColorStop(0.25, 'rgba(255,210,120,0.55)');
+    grad.addColorStop(0.55, 'rgba(255,150,60,0.18)');
+    grad.addColorStop(1.0, 'rgba(255,120,40,0)');
+    gctx.fillStyle = grad;
+    gctx.fillRect(0, 0, 256, 256);
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: new THREE.CanvasTexture(glowCanvas),
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        transparent: true
+    }));
+    glow.scale.set(4.5, 4.5, 1);
+    sunMesh.add(glow);
 
     const dirLight = new THREE.DirectionalLight(0xffffff, 2.0);
     dirLight.position.copy(sunDir);
@@ -121,5 +156,12 @@ export async function createGlobe(scene) {
     scene.add(atmoMesh);
     scene.add(auroraMesh);
 
-    return { earth: earthMesh, atmosphere: atmoMesh, aurora: auroraMesh, uniforms, sunDir, sunMesh };
+    function setSunFromDate(date) {
+        const d = computeSunDir(date);
+        sunDir.copy(d);
+        sunMesh.position.copy(d).multiplyScalar(20);
+        dirLight.position.copy(d);
+    }
+
+    return { earth: earthMesh, atmosphere: atmoMesh, aurora: auroraMesh, uniforms, sunDir, sunMesh, setSunFromDate };
 }
